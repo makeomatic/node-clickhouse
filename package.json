@@ -1,13 +1,13 @@
 {
-  "name": "@apla/clickhouse",
+  "name": "@makeomatic/clickhouse",
   "version": "1.6.4",
   "description": "Yandex ClickHouse database interface",
   "main": "src/clickhouse.js",
   "scripts": {
-    "legacy-install": "node ./src/legacy-support.js",
-    "launch-docker-image": "docker run --rm -d -p 8123:8123 --name clickhouse-server yandex/clickhouse-server",
+    "launch-docker-image": "docker run --rm -p 8123:8123 --name clickhouse-server yandex/clickhouse-server",
     "stop-docker-image": "docker stop clickhouse-server",
     "test": "nyc mocha --recursive ./test -R spec",
+    "lint": "eslint ./src",
     "report": "nyc report --reporter=lcov > coverage.lcov && codecov",
     "simpletest": "mocha --recursive ./test -R spec",
     "torturetest": "TORTURE=1 mocha -gc --recursive ./test -R spec"
@@ -27,12 +27,18 @@
     "url": "https://github.com/apla/node-clickhouse/issues"
   },
   "homepage": "https://github.com/apla/node-clickhouse#readme",
-  "dependencies": {},
+  "dependencies": {
+    "undici": "^4.4.7"
+  },
   "devDependencies": {
     "bluebird": "^3.5.0",
-    "codecov": "^2.2.0",
-    "mocha": "^2.5.3",
-    "nyc": "^10.2.0"
+    "codecov": "^3.8.3",
+    "eslint": "^7.32.0",
+    "eslint-config-makeomatic": "^5.0.4",
+    "eslint-plugin-import": "^2.24.2",
+    "eslint-plugin-unicorn": "^35.0.0",
+    "mocha": "^9.1.0",
+    "nyc": "^15.1.0"
   },
   "engines": {
     "node": ">=0.10"
