@@ -51,7 +51,9 @@ function httpResponseHandler(stream, reqParams, reqData, cb, response) {
 
   // or implement it youself
   let jsonParser;
+  let isStreamingParser = false;
   if (/EachRow/.test(reqData.format)) {
+    isStreamingParser = true;
     let linesProcessed = 0;
 
     const isCompact = /Compact/.test(reqData.format);
@@ -90,8 +92,9 @@ function httpResponseHandler(stream, reqParams, reqData, cb, response) {
 
   let symbolsTransferred = 0;
 
-  const streamingParse = response.headers['content-type']
-    && response.headers['content-type'].indexOf('application/json') === 0
+  const isJSON = response.headers['content-type']
+    && response.headers['content-type'].indexOf('application/json') === 0;
+  const streamingParse = (isJSON || isStreamingParser)
     && !reqData.syncParser
     && str;
 
@@ -153,6 +156,19 @@ function httpResponseHandler(stream, reqParams, reqData, cb, response) {
     let data;
 
     const contentType = response.headers['content-type'];
+    stream.transferred = symbolsTransferred;
+    stream.meta = jsonParser.columns;
+
+    if (response.statusCode === 200 && streamingParse && isStreamingParser) {
+      stream.push(null);
+      if (cb) {
+        cb(null, {
+          meta: jsonParser.columns,
+          transferred: symbolsTransferred,
+        });
+      }
+      return;
+    }
 
     // Early return and stream end in case when content-type means empty body
     if (response.statusCode === 200 && (

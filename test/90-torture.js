@@ -1,262 +1,147 @@
-var ClickHouse = require ("../src/clickhouse");
-
-var http = require ('http');
-var url  = require ('url');
-var qs   = require ('querystring');
-
-var assert = require ("assert");
-
-var memwatch;
-try {
-	var nodeMajorVersion = parseInt(process.version.substr(1));
-	if (nodeMajorVersion >= 10) {
-		memwatch = require('memwatch');
-	} else {
-		memwatch = require('memwatch-next');
-	}
-} catch (err) {
-	if (process.env.TORTURE) {
-		console.error ("For the torture test you should install memwatch-next (node 8) or @airbnb/memwatch (node >= 10)");
-		console.error (err);
-		process.exit (1);
-	}
-}
+/* eslint-disable no-console */
+const memwatch = require('@airbnb/node-memwatch');
+const { once } = require('events');
+const Limit = require('p-limit');
+const ClickHouse = require('../src/clickhouse');
 
 // replace with it, if you want to run this test suite
-var method  = process.env.TORTURE ? it : it.skip;
-var timeout = 60000;
+const test = process.env.TORTURE ? it : it.skip;
+const timeout = 120000;
+const limit = Limit(50);
 
-function checkUsageAndGC (used, baseline) {
-	function inMB (v) {
-		return (v/Math.pow (2, 20)).toFixed (1) + 'MB';
-	}
-	var usage = 'rss heapTotal heapUsed external'.split (' ').map (function (k) {
-		var delta = used[k] - baseline[k];
-		return k + ' ' + inMB (used[k]) + ' / +' + inMB (delta);
-	});
+function checkUsageAndGC(used, baseline) {
+  function inMB(v) {
+    return `${(v / (2 ** 20)).toFixed(1)}MB`;
+  }
+  const usage = 'rss heapTotal heapUsed external'.split(' ').map((k) => {
+    const delta = used[k] - baseline[k];
+    return `${k} ${inMB(used[k])} / +${inMB(delta)}`;
+  });
 
-	console.log (usage.join (' '));
-
-	gc ();
+  console.log(usage.join(' '));
+  if (global.gc) global.gc();
 }
 
-describe ("torturing", function () {
+describe('torturing', function testSuite() {
+  this.timeout(timeout);
+  if (global.gc) global.gc();
 
-	global.gc && gc();
+  const host = process.env.CLICKHOUSE_HOST || '127.0.0.1';
+  const port = process.env.CLICKHOUSE_PORT || 8123;
+  const baselineMemoryUsage = process.memoryUsage();
 
-	var server,
-		host = process.env.CLICKHOUSE_HOST || '127.0.0.1',
-		port = process.env.CLICKHOUSE_PORT || 8123,
-		lastSuite,
-		baselineMemoryUsage = process.memoryUsage();
+  before(() => {
+    memwatch.on('leak', (info) => {
+      console.log('leak', info);
+    });
+  });
 
-	before (function () {
-		memwatch && memwatch.on ('leak', function (info) {
-			console.log (info);
-		});
+  test('selects 1 million using async parser', async () => {
+    const ch = new ClickHouse({ host, port, readonly: true });
+    let symbolsTransferred = 0;
 
-		// console.log (process.memoryUsage());
-	})
+    const input = Array.from({ length: 10 }).map(() => {
+      return limit(async () => {
+        const stream = ch.query('SELECT number FROM system.numbers LIMIT 1000000', { format: 'JSONEachRow' });
+        stream.on('data', () => {});
+        await once(stream, 'end');
+        symbolsTransferred += stream.transferred;
+      });
+    });
 
-	method ("selects 1 million using async parser", function (done) {
+    await Promise.all(input);
+    console.log('symbols transferred:', symbolsTransferred);
+  });
 
-		this.timeout (timeout);
+  // enable this test separately
+  it('selects 1 million using sync parser', async () => {
+    const ch = new ClickHouse({ host, port, readonly: true });
+    let symbolsTransferred = 0;
 
-		var ch = new ClickHouse ({host: host, port: port, readonly: true});
-		var queryCount = 0;
-		var symbolsTransferred = 0;
+    const input = Array.from({ length: 10 }).map(() => {
+      return limit(async () => {
+        const stream = ch.query('SELECT number FROM system.numbers LIMIT 1000000', { syncParser: true });
+        stream.on('data', () => {});
+        await once(stream, 'end');
+        symbolsTransferred += stream.transferred;
+      });
+    });
 
-		function runQuery () {
-			var stream = ch.query ("SELECT number FROM system.numbers LIMIT 1000000", function (err, result) {
-				symbolsTransferred += result.transferred;
-				queryCount ++;
-				if (queryCount < 10)
-					return runQuery ();
-				console.log ('symbols transferred:', symbolsTransferred);
-				done();
-			});
+    await Promise.all(input);
+    console.log('symbols transferred:', symbolsTransferred);
+  });
 
-			stream.on ('error', function (err) {
-				done (err);
-			});
+  test.only('selects system.columns using async parser #1', async () => {
+    const ch = new ClickHouse({ host, port, readonly: true });
+    let symbolsTransferred = 0;
 
-			stream.on ('data', function (row) {
-				// just throw away that data
-			});
-		}
+    const input = Array.from({ length: 10000 }).map(() => {
+      return limit(async () => {
+        const stream = ch.query('SELECT * FROM system.columns', { format: 'JSONCompactEachRowWithNamesAndTypes' });
+        stream.on('data', () => {});
+        stream.on('metadata', (meta) => console.log(meta));
+        await once(stream, 'end');
+        symbolsTransferred += stream.transferred;
+      });
+    });
 
-		runQuery ();
+    await Promise.all(input);
+    console.log('symbols transferred:', symbolsTransferred);
+  });
 
-		lastSuite = 'async';
-	});
+  test('selects system.columns using sync parser #1', async () => {
+    const ch = new ClickHouse({ host, port, readonly: true });
 
-	// enable this test separately
-	it.skip ("selects 1 million using sync parser", function (done) {
+    let symbolsTransferred = 0;
+    const input = Array.from({ length: 10000 }).map(() => {
+      return limit(async () => {
+        const stream = ch.query('SELECT * FROM system.columns', { syncParser: true });
+        stream.on('data', () => {});
+        await once(stream, 'end');
+        symbolsTransferred += stream.transferred;
+      });
+    });
 
-		this.timeout (timeout);
+    await Promise.all(input);
+    console.log('symbols transferred:', symbolsTransferred);
+  });
 
-		var ch = new ClickHouse ({host: host, port: port, readonly: true});
-		var queryCount = 0;
-		var symbolsTransferred = 0;
+  test('selects system.columns using async parser #2', async () => {
+    const ch = new ClickHouse({ host, port, readonly: true });
 
-		function runQuery () {
-			var stream = ch.query ("SELECT number FROM system.numbers LIMIT 1000000", {syncParser: true}, function (err, result) {
-				symbolsTransferred += result.transferred;
-				queryCount ++;
-				if (queryCount < 10)
-					return runQuery ();
-				console.log ('symbols transferred:', symbolsTransferred);
-				done();
-			});
+    let symbolsTransferred = 0;
+    const input = Array.from({ length: 10000 }).map(() => {
+      return limit(async () => {
+        const stream = ch.query('SELECT * FROM system.columns', { format: 'JSONEachRowWithProgress' });
+        stream.on('data', () => {});
+        await once(stream, 'end');
+        symbolsTransferred += stream.transferred;
+      });
+    });
 
-			stream.on ('error', function (err) {
-				done (err);
-			});
+    await Promise.all(input);
+    console.log('symbols transferred:', symbolsTransferred);
+  });
 
-			stream.on ('data', function (row) {
-				// just throw away that data
-			});
-		}
+  test('selects system.columns using sync parser #2', async () => {
+    const ch = new ClickHouse({ host, port, readonly: true });
 
-		runQuery ();
+    let symbolsTransferred = 0;
+    const input = Array.from({ length: 10000 }).map(() => {
+      return limit(async () => {
+        const stream = ch.query('SELECT * FROM system.columns', { syncParser: true });
+        stream.on('data', () => {});
+        await once(stream, 'end');
+        symbolsTransferred += stream.transferred;
+      });
+    });
 
-		lastSuite = 'sync';
-	});
+    await Promise.all(input);
+    console.log('symbols transferred:', symbolsTransferred);
+  });
 
-	method ("selects system.columns using async parser #1", function (done) {
-
-		this.timeout (timeout);
-
-		var ch = new ClickHouse ({host: host, port: port, readonly: true});
-		var queryCount = 0;
-		var symbolsTransferred = 0;
-
-		function runQuery () {
-			var stream = ch.query ("SELECT * FROM system.columns", function (err, result) {
-				symbolsTransferred += result.transferred;
-				queryCount ++;
-				if (queryCount < 10000)
-					return runQuery ();
-				console.log ('symbols transferred:', symbolsTransferred);
-				done();
-			});
-
-			stream.on ('error', function (err) {
-				done (err);
-			});
-
-			stream.on ('data', function (row) {
-				// just throw away that data
-			});
-		}
-
-		runQuery ();
-
-		lastSuite = 'async';
-	});
-
-	method ("selects system.columns using sync parser #1", function (done) {
-
-		this.timeout (timeout);
-
-		var ch = new ClickHouse ({host: host, port: port, readonly: true});
-		var queryCount = 0;
-		var symbolsTransferred = 0;
-
-		function runQuery () {
-			var stream = ch.query ("SELECT * FROM system.columns", {syncParser: true}, function (err, result) {
-				symbolsTransferred += result.transferred;
-				queryCount ++;
-				if (queryCount < 10000)
-					return runQuery ();
-				console.log ('symbols transferred:', symbolsTransferred);
-				done();
-			});
-
-			stream.on ('error', function (err) {
-				done (err);
-			});
-
-			stream.on ('data', function (row) {
-				// just throw away that data
-			});
-		}
-
-		runQuery ();
-
-		lastSuite = 'sync';
-	});
-
-	method ("selects system.columns using async parser #2", function (done) {
-
-		this.timeout (timeout);
-
-		var ch = new ClickHouse ({host: host, port: port, readonly: true});
-		var queryCount = 0;
-		var symbolsTransferred = 0;
-
-		function runQuery () {
-			var stream = ch.query ("SELECT * FROM system.columns", function (err, result) {
-				symbolsTransferred += result.transferred;
-				queryCount ++;
-				if (queryCount < 10000)
-					return runQuery ();
-				console.log ('symbols transferred:', symbolsTransferred);
-				done();
-			});
-
-			stream.on ('error', function (err) {
-				done (err);
-			});
-
-			stream.on ('data', function (row) {
-				// just throw away that data
-			});
-		}
-
-		runQuery ();
-
-		lastSuite = 'async';
-	});
-
-	method ("selects system.columns using sync parser #2", function (done) {
-
-		this.timeout (timeout);
-
-		var ch = new ClickHouse ({host: host, port: port, readonly: true});
-		var queryCount = 0;
-		var symbolsTransferred = 0;
-
-		function runQuery () {
-			var stream = ch.query ("SELECT * FROM system.columns", {syncParser: true}, function (err, result) {
-				symbolsTransferred += result.transferred;
-				queryCount ++;
-				if (queryCount < 10000)
-					return runQuery ();
-				console.log ('symbols transferred:', symbolsTransferred);
-				done();
-			});
-
-			stream.on ('error', function (err) {
-				done (err);
-			});
-
-			stream.on ('data', function (row) {
-				// just throw away that data
-			});
-		}
-
-		runQuery ();
-
-		lastSuite = 'sync';
-	});
-
-	afterEach (function () {
-
-		checkUsageAndGC (process.memoryUsage(), baselineMemoryUsage)
-
-		// console.log ('after', lastSuite,  process.memoryUsage());
-
-	})
-
+  afterEach(() => {
+    checkUsageAndGC(process.memoryUsage(), baselineMemoryUsage);
+    // console.log ('after', lastSuite,  process.memoryUsage());
+  });
 });
