@@ -1,158 +1,146 @@
-var ClickHouse = require ("../src/clickhouse");
+const http = require('http');
+const { URL } = require('url');
 
-var http = require ('http');
-var url  = require ('url');
-var qs   = require ('querystring');
+const assert = require('assert');
+const ClickHouse = require('../src/clickhouse');
 
-var assert = require ("assert");
-
-var responses = {
-	"SELECT 1 FORMAT JSONCompact": {
-		"meta": [
-			{"name": "1", "type": "UInt8"}
-		],
-		"data": [
-			[1]
-		],
-		"rows": 1
-	},
-	"SHOW DATABASES FORMAT JSONCompact": {
-		"meta": [
-			{"name": "name", "type": "String"}
-		],
-		"data": [
-			["default"],
-			["system"]
-		],
-		"rows": 2
-	},
-	"SELECT number FROM system.numbers LIMIT 10 FORMAT JSONCompact": {
-		"meta": [
-			{"name":"number","type":"UInt64"}
-		],
-		"data": [
-			["0"],["1"],["2"],["3"],["4"],["5"],["6"],["7"],["8"],["9"]
-		],
-		"rows": 10,
-		"rows_before_limit_at_least": 10
-	},
+const responses = {
+  'SELECT 1 FORMAT JSONCompact': {
+    meta: [
+      { name: '1', type: 'UInt8' },
+    ],
+    data: [
+      [1],
+    ],
+    rows: 1,
+  },
+  'SHOW DATABASES FORMAT JSONCompact': {
+    meta: [
+      { name: 'name', type: 'String' },
+    ],
+    data: [
+      ['default'],
+      ['system'],
+    ],
+    rows: 2,
+  },
+  'SELECT number FROM system.numbers LIMIT 10 FORMAT JSONCompact': {
+    meta: [
+      { name: 'number', type: 'UInt64' },
+    ],
+    data: [
+      ['0'], ['1'], ['2'], ['3'], ['4'], ['5'], ['6'], ['7'], ['8'], ['9'],
+    ],
+    rows: 10,
+    rows_before_limit_at_least: 10,
+  },
 
 };
 
-describe ("simulated queries", function () {
+describe('simulated queries', () => {
+  let server;
+  let host;
+  let port;
 
-	var server,
-		host,
-		port;
+  before((done) => {
+    server = http.createServer((req, res) => {
+      const queryString = new URL(req.url, 'http://clickhouse-server').searchParams;
 
-	before (function (done) {
+      // test only supports db queries using queryString
+      if (!queryString.toString().length) {
+        res.writeHead(200, {});
+        res.end('Ok.\n');
+        return;
+      }
 
-		server = http.createServer(function (req, res) {
+      if (queryString.get('query') in responses) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+        // console.log (JSON.stringify (responses[queryObject.query], null, "\t"));
+        res.end(JSON.stringify(responses[queryString.get('query')], null, '\t'));
+        return;
+      }
 
-			var queryString = url.parse (req.url).query;
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=UTF-8' });
+      res.end('Simulated error');
+    });
 
-			// test only supports db queries using queryString
-			if (!queryString) {
-				res.writeHead (200, {});
-				res.end ("Ok.\n");
-				return;
-			}
+    server.on('clientError', (err, socket) => {
+      socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+    });
 
-			var queryObject = qs.parse (queryString);
+    server.listen(0, () => {
+      host = server.address().address;
+      port = server.address().port;
 
-			// console.log (queryObject);
+      host = host === '0.0.0.0' ? '127.0.0.1' : host;
+      host = host === '::' ? '127.0.0.1' : host;
 
-			if (queryObject.query in responses) {
-				res.writeHead (200, {"Content-Type": "application/json; charset=UTF-8"});
-				// console.log (JSON.stringify (responses[queryObject.query], null, "\t"));
-				res.end (JSON.stringify (responses[queryObject.query], null, "\t"));
-				return;
-			}
+      done();
+    });
+  });
 
-			res.writeHead (500, {"Content-Type": "text/plain; charset=UTF-8"});
-			res.end ("Simulated error");
-		});
+  after((done) => {
+    server.close(() => {
+      done();
+    });
+  });
 
-		server.on('clientError', function (err, socket) {
-			socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-		});
+  // this.timeout (5000);
 
-		server.listen (0, function (evt) {
-			host = server.address().address;
-			port = server.address().port;
+  it('pings', (done) => {
+    const ch = new ClickHouse({ host, port });
+    ch.ping((err, ok) => {
+      assert(!err);
+      assert(ok === 'Ok.\n', "ping response should be 'Ok.\\n'");
+      done();
+    });
+  });
 
-			host = host === '0.0.0.0' ? '127.0.0.1' : host;
-			host = host === '::' ? '127.0.0.1' : host;
+  it('selects using callback', (done) => {
+    const ch = new ClickHouse({ host, port, readonly: true });
+    ch.query('SELECT 1', { syncParser: true }, (err, result) => {
+      assert(!err);
+      assert(result.meta, 'result should be Object with `data` key to represent rows');
+      assert(result.data, 'result should be Object with `meta` key to represent column info');
+      assert(result.meta.constructor === Array, 'metadata is an array with column descriptions');
+      done();
+    });
+  });
 
-			done();
-		});
+  it('selects numbers using callback', (done) => {
+    const ch = new ClickHouse({ host, port, readonly: true });
+    ch.query('SELECT number FROM system.numbers LIMIT 10', { syncParser: true }, (err, result) => {
+      assert(!err);
+      assert(result.data, 'result should be Object with `data` key to represent rows');
+      assert(result.meta, 'result should be Object with `meta` key to represent column info');
+      assert(result.meta.constructor === Array, 'metadata is an array with column descriptions');
+      assert(result.meta[0].name === 'number');
+      assert(result.data.constructor === Array, 'data is a row set');
+      assert(result.data[0].constructor === Array, 'each row contains list of values (using FORMAT JSONCompact)');
+      assert(result.data[9][0] === '9'); // this should be corrected at database side
+      assert(result.rows === 10);
+      assert(result.rows_before_limit_at_least === 10);
+      done();
+    });
+  });
 
-	})
+  it('selects numbers using stream', (done) => {
+    const ch = new ClickHouse({ host, port, readonly: true });
+    const rows = [];
+    const stream = ch.query('SELECT number FROM system.numbers LIMIT 10', (err, result) => {
+      assert(!err);
+      assert(result.meta, 'result should be Object with `meta` key to represent column info');
+      assert(result.meta.constructor === Array, 'metadata is an array with column descriptions');
+      assert(result.meta[0].name === 'number');
+      assert(rows[0].constructor === Array, 'each row contains list of values (using FORMAT JSONCompact)');
+      assert(rows[9][0] === '9'); // this should be corrected at database side
+      assert(result.rows === 10);
+      assert(result.rows_before_limit_at_least === 10);
+      done();
+    });
 
-	after (function (done) {
-		server.close(function () {
-			done();
-		});
-	});
-
-	// this.timeout (5000);
-
-	it ("pings", function (done) {
-		var ch = new ClickHouse ({host: host, port: port});
-		ch.ping (function (err, ok) {
-			assert (!err);
-			assert (ok === "Ok.\n", "ping response should be 'Ok.\\n'");
-			done ();
-		});
-	});
-
-	it ("selects using callback", function (done) {
-		var ch = new ClickHouse ({host: host, port: port, readonly: true});
-		ch.query ("SELECT 1", {syncParser: true}, function (err, result) {
-			assert (!err);
-			assert (result.meta, "result should be Object with `data` key to represent rows");
-			assert (result.data, "result should be Object with `meta` key to represent column info");
-			assert (result.meta.constructor === Array, "metadata is an array with column descriptions");
-			done ();
-		});
-	});
-
-	it ("selects numbers using callback", function (done) {
-		var ch = new ClickHouse ({host: host, port: port, readonly: true});
-		ch.query ("SELECT number FROM system.numbers LIMIT 10", {syncParser: true}, function (err, result) {
-			assert (!err);
-			assert (result.data, "result should be Object with `data` key to represent rows");
-			assert (result.meta, "result should be Object with `meta` key to represent column info");
-			assert (result.meta.constructor === Array, "metadata is an array with column descriptions");
-			assert (result.meta[0].name === "number");
-			assert (result.data.constructor === Array, "data is a row set");
-			assert (result.data[0].constructor === Array, "each row contains list of values (using FORMAT JSONCompact)");
-			assert (result.data[9][0] === "9"); // this should be corrected at database side
-			assert (result.rows === 10);
-			assert (result.rows_before_limit_at_least === 10);
-			done ();
-		});
-	});
-
-	it ("selects numbers using stream", function (done) {
-		var ch = new ClickHouse ({host: host, port: port, readonly: true});
-		var rows = [];
-		var stream = ch.query ("SELECT number FROM system.numbers LIMIT 10", function (err, result) {
-			assert (!err);
-			assert (result.meta, "result should be Object with `meta` key to represent column info");
-			assert (result.meta.constructor === Array, "metadata is an array with column descriptions");
-			assert (result.meta[0].name === "number");
-			assert (rows[0].constructor === Array, "each row contains list of values (using FORMAT JSONCompact)");
-			assert (rows[9][0] === "9"); // this should be corrected at database side
-			assert (result.rows === 10);
-			assert (result.rows_before_limit_at_least === 10);
-			done ();
-		});
-
-		stream.on ('data', function (row) {
-			rows.push (row);
-		})
-	});
-
-
+    stream.on('data', (row) => {
+      rows.push(row);
+    });
+  });
 });

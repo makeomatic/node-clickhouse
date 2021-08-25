@@ -4,33 +4,37 @@
   "description": "Yandex ClickHouse database interface",
   "main": "src/clickhouse.js",
   "scripts": {
-    "launch-docker-image": "docker run --rm -p 8123:8123 --name clickhouse-server yandex/clickhouse-server",
+    "launch-docker-image": "docker run --rm -it -p 8123:8123 --name clickhouse-server yandex/clickhouse-server",
     "stop-docker-image": "docker stop clickhouse-server",
     "test": "nyc mocha --recursive ./test -R spec",
     "lint": "eslint ./src",
     "report": "nyc report --reporter=lcov > coverage.lcov && codecov",
     "simpletest": "mocha --recursive ./test -R spec",
-    "torturetest": "TORTURE=1 mocha -gc --recursive ./test -R spec"
+    "torturetest": "TORTURE=1 node --expose-gc ./node_modules/.bin/mocha --recursive ./test -R spec"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/apla/node-clickhouse.git"
+    "url": "git+https://github.com/makeomatic/node-clickhouse.git"
   },
   "keywords": [
     "clickhouse",
     "database",
     "db"
   ],
+  "maintainers": [
+    "Vitaly Aminev <v@makeomatic.ca>"
+  ],
   "author": "Ivan Baktsheev <dot.and.thing@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/apla/node-clickhouse/issues"
+    "url": "https://github.com/makeomatic/node-clickhouse/issues"
   },
-  "homepage": "https://github.com/apla/node-clickhouse#readme",
+  "homepage": "https://github.com/makeomatic/node-clickhouse#readme",
   "dependencies": {
     "undici": "^4.4.7"
   },
   "devDependencies": {
+    "@airbnb/node-memwatch": "^2.0.0",
     "bluebird": "^3.5.0",
     "codecov": "^3.8.3",
     "eslint": "^7.32.0",
@@ -38,9 +42,10 @@
     "eslint-plugin-import": "^2.24.2",
     "eslint-plugin-unicorn": "^35.0.0",
     "mocha": "^9.1.0",
-    "nyc": "^15.1.0"
+    "nyc": "^15.1.0",
+    "p-limit": "3"
   },
   "engines": {
-    "node": ">=0.10"
+    "node": ">= 12"
   }
 }
