@@ -12,5 +12,5 @@ exports.LIBRARY_SPECIFIC_OPTIONS = new Set([
   'syncParser',
   'omitFormat',
   'readonly',
-  'useQueryString'
+  'useQueryString',
 ]);
