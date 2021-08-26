@@ -4,13 +4,14 @@
   "description": "Yandex ClickHouse database interface",
   "main": "src/clickhouse.js",
   "scripts": {
-    "launch-docker-image": "docker run --rm -it -p 8123:8123 --name clickhouse-server yandex/clickhouse-server",
+    "launch-docker-image": "docker run -p 8123:8123 --name clickhouse-server yandex/clickhouse-server",
     "stop-docker-image": "docker stop clickhouse-server",
     "test": "nyc mocha --recursive ./test -R spec",
     "lint": "eslint ./src",
     "report": "nyc report --reporter=lcov > coverage.lcov && codecov",
     "simpletest": "mocha --recursive ./test -R spec",
-    "torturetest": "TORTURE=1 node --expose-gc ./node_modules/.bin/mocha --recursive ./test -R spec"
+    "torturetest": "TORTURE=1 NODE_ENV=test node --expose-gc ./node_modules/.bin/mocha --recursive ./test -R spec",
+    "clinic": "TORTURE=1 NODE_ENV=test clinic flame -- node --expose-gc ./node_modules/.bin/mocha --recursive ./test -R spec"
   },
   "repository": {
     "type": "git",
@@ -31,11 +32,15 @@
   },
   "homepage": "https://github.com/makeomatic/node-clickhouse#readme",
   "dependencies": {
+    "binary-split": "^1.0.5",
+    "bl": "^5.0.0",
+    "lodash.defaults": "^4.2.0",
     "undici": "^4.4.7"
   },
   "devDependencies": {
     "@airbnb/node-memwatch": "^2.0.0",
     "bluebird": "^3.5.0",
+    "clinic": "^9.0.0",
     "codecov": "^3.8.3",
     "eslint": "^7.32.0",
     "eslint-config-makeomatic": "^5.0.4",
