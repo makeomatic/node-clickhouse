@@ -4,7 +4,7 @@ const qs = require('querystring');
 const defaults = require('lodash.defaults');
 const assert = require('assert');
 const split2 = require('split2');
-const binarySplit = require('binary-split');
+// const binarySplit = require('binary-split');
 const util = require('util');
 const { BufferListStream } = require('bl');
 const {
