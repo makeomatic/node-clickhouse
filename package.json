@@ -9,6 +9,7 @@
   "scripts": {
     "launch-docker-image": "docker run -p 8123:8123 --name clickhouse-server yandex/clickhouse-server",
     "stop-docker-image": "docker stop clickhouse-server",
+    "pretest": "yarn lint",
     "test": "nyc mocha --recursive ./test -R spec",
     "lint": "eslint ./src",
     "report": "nyc report --reporter=lcov > coverage.lcov && codecov",
