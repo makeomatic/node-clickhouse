@@ -11,7 +11,8 @@
     "report": "nyc report --reporter=lcov > coverage.lcov && codecov",
     "simpletest": "mocha --recursive ./test -R spec",
     "torturetest": "TORTURE=1 NODE_ENV=test node --expose-gc ./node_modules/.bin/mocha --recursive ./test -R spec",
-    "clinic": "TORTURE=1 NODE_ENV=test clinic flame -- node --expose-gc ./node_modules/.bin/mocha --recursive ./test -R spec"
+    "clinic": "TORTURE=1 NODE_ENV=test clinic flame -- node --expose-gc ./node_modules/.bin/mocha --recursive ./test -R spec",
+    "semantic-release": "semantic-release"
   },
   "repository": {
     "type": "git",
@@ -39,6 +40,7 @@
   },
   "devDependencies": {
     "@airbnb/node-memwatch": "^2.0.0",
+    "@makeomatic/deploy": "^10.4.0",
     "bluebird": "^3.5.0",
     "clinic": "^9.0.0",
     "codecov": "^3.8.3",
@@ -48,9 +50,16 @@
     "eslint-plugin-unicorn": "^35.0.0",
     "mocha": "^9.1.0",
     "nyc": "^15.1.0",
-    "p-limit": "3"
+    "p-limit": "3",
+    "semantic-release": "^17.4.7"
   },
   "engines": {
     "node": ">= 12"
+  },
+  "husky": {
+    "hooks": {
+      "commit-msg": "commitlint -e $HUSKY_GIT_PARAMS",
+      "prepare-commit-msg": "./node_modules/@makeomatic/deploy/git-hooks/prepare-commit-msg $HUSKY_GIT_PARAMS"
+    }
   }
 }
