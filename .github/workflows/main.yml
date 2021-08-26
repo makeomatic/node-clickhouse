@@ -45,7 +45,7 @@ jobs:
         with:
           node-version: '14.x'
           registry-url: 'https://registry.npmjs.org'
-          scope: ${{ secrets.NPM_MAKEOMATIC_SCOPE }}
+
       - run: yarn install --frozen-lockfile
       - run: yarn semantic-release
         env:
