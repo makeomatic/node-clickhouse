@@ -3,6 +3,9 @@
   "version": "1.6.4",
   "description": "Yandex ClickHouse database interface",
   "main": "src/clickhouse.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "launch-docker-image": "docker run -p 8123:8123 --name clickhouse-server yandex/clickhouse-server",
     "stop-docker-image": "docker stop clickhouse-server",
