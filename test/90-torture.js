@@ -1,13 +1,14 @@
 /* eslint-disable no-console */
-const memwatch = require('@airbnb/node-memwatch');
+// const memwatch = require('@airbnb/node-memwatch');
 const { once } = require('events');
 const Limit = require('p-limit');
+// const util = require('util');
 const ClickHouse = require('../src/clickhouse');
 
 // replace with it, if you want to run this test suite
 const test = process.env.TORTURE ? it : it.skip;
 const timeout = 120000;
-const limit = Limit(50);
+const limit = Limit(100);
 
 function checkUsageAndGC(used, baseline) {
   function inMB(v) {
@@ -24,20 +25,21 @@ function checkUsageAndGC(used, baseline) {
 
 describe('torturing', function testSuite() {
   this.timeout(timeout);
-  if (global.gc) global.gc();
 
   const host = process.env.CLICKHOUSE_HOST || '127.0.0.1';
   const port = process.env.CLICKHOUSE_PORT || 8123;
-  const baselineMemoryUsage = process.memoryUsage();
+  let ch;
+  // let hd;
+  let baselineMemoryUsage;
 
   before(() => {
-    memwatch.on('leak', (info) => {
-      console.log('leak', info);
-    });
+    if (global.gc) global.gc();
+    // hd = new memwatch.HeapDiff();
+    baselineMemoryUsage = process.memoryUsage();
+    ch = new ClickHouse({ host, port, readonly: true });
   });
 
   test('selects 1 million using async parser', async () => {
-    const ch = new ClickHouse({ host, port, readonly: true });
     let symbolsTransferred = 0;
 
     const input = Array.from({ length: 10 }).map(() => {
@@ -54,8 +56,7 @@ describe('torturing', function testSuite() {
   });
 
   // enable this test separately
-  it('selects 1 million using sync parser', async () => {
-    const ch = new ClickHouse({ host, port, readonly: true });
+  test('selects 1 million using sync parser', async () => {
     let symbolsTransferred = 0;
 
     const input = Array.from({ length: 10 }).map(() => {
@@ -71,16 +72,17 @@ describe('torturing', function testSuite() {
     console.log('symbols transferred:', symbolsTransferred);
   });
 
-  test.only('selects system.columns using async parser #1', async () => {
-    const ch = new ClickHouse({ host, port, readonly: true });
+  test('selects system.columns using async parser #1', async () => {
     let symbolsTransferred = 0;
 
     const input = Array.from({ length: 10000 }).map(() => {
       return limit(async () => {
         const stream = ch.query('SELECT * FROM system.columns', { format: 'JSONCompactEachRowWithNamesAndTypes' });
         stream.on('data', () => {});
-        stream.on('metadata', (meta) => console.log(meta));
-        await once(stream, 'end');
+        await Promise.all([
+          once(stream, 'metadata'),
+          once(stream, 'end'),
+        ]);
         symbolsTransferred += stream.transferred;
       });
     });
@@ -90,8 +92,6 @@ describe('torturing', function testSuite() {
   });
 
   test('selects system.columns using sync parser #1', async () => {
-    const ch = new ClickHouse({ host, port, readonly: true });
-
     let symbolsTransferred = 0;
     const input = Array.from({ length: 10000 }).map(() => {
       return limit(async () => {
@@ -107,10 +107,8 @@ describe('torturing', function testSuite() {
   });
 
   test('selects system.columns using async parser #2', async () => {
-    const ch = new ClickHouse({ host, port, readonly: true });
-
     let symbolsTransferred = 0;
-    const input = Array.from({ length: 10000 }).map(() => {
+    const input = Array.from({ length: 5000 }).map(() => {
       return limit(async () => {
         const stream = ch.query('SELECT * FROM system.columns', { format: 'JSONEachRowWithProgress' });
         stream.on('data', () => {});
@@ -124,8 +122,6 @@ describe('torturing', function testSuite() {
   });
 
   test('selects system.columns using sync parser #2', async () => {
-    const ch = new ClickHouse({ host, port, readonly: true });
-
     let symbolsTransferred = 0;
     const input = Array.from({ length: 10000 }).map(() => {
       return limit(async () => {
@@ -140,8 +136,13 @@ describe('torturing', function testSuite() {
     console.log('symbols transferred:', symbolsTransferred);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     checkUsageAndGC(process.memoryUsage(), baselineMemoryUsage);
-    // console.log ('after', lastSuite,  process.memoryUsage());
+    // console.log(util.inspect(hd.end(), false, 1, true));
+    // hd = new memwatch.HeapDiff();
+  });
+
+  after(async () => {
+    await ch.close();
   });
 });

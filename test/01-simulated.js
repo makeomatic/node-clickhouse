@@ -41,6 +41,7 @@ describe('simulated queries', () => {
   let server;
   let host;
   let port;
+  let ch;
 
   before((done) => {
     server = http.createServer((req, res) => {
@@ -79,6 +80,10 @@ describe('simulated queries', () => {
     });
   });
 
+  afterEach(async () => {
+    await ch.close();
+  });
+
   after((done) => {
     server.close(() => {
       done();
@@ -86,9 +91,8 @@ describe('simulated queries', () => {
   });
 
   // this.timeout (5000);
-
   it('pings', (done) => {
-    const ch = new ClickHouse({ host, port });
+    ch = new ClickHouse({ host, port });
     ch.ping((err, ok) => {
       assert(!err);
       assert(ok === 'Ok.\n', "ping response should be 'Ok.\\n'");
@@ -97,7 +101,7 @@ describe('simulated queries', () => {
   });
 
   it('selects using callback', (done) => {
-    const ch = new ClickHouse({ host, port, readonly: true });
+    ch = new ClickHouse({ host, port, readonly: true });
     ch.query('SELECT 1', { syncParser: true }, (err, result) => {
       assert(!err);
       assert(result.meta, 'result should be Object with `data` key to represent rows');
@@ -108,7 +112,7 @@ describe('simulated queries', () => {
   });
 
   it('selects numbers using callback', (done) => {
-    const ch = new ClickHouse({ host, port, readonly: true });
+    ch = new ClickHouse({ host, port, readonly: true });
     ch.query('SELECT number FROM system.numbers LIMIT 10', { syncParser: true }, (err, result) => {
       assert(!err);
       assert(result.data, 'result should be Object with `data` key to represent rows');
@@ -125,7 +129,7 @@ describe('simulated queries', () => {
   });
 
   it('selects numbers using stream', (done) => {
-    const ch = new ClickHouse({ host, port, readonly: true });
+    ch = new ClickHouse({ host, port, readonly: true });
     const rows = [];
     const stream = ch.query('SELECT number FROM system.numbers LIMIT 10', (err, result) => {
       assert(!err);

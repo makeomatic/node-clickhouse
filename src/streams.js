@@ -1,5 +1,6 @@
+/* eslint-disable max-classes-per-file */
 const util = require('util');
-const { Duplex } = require('stream');
+const { Duplex, Transform, Writable } = require('stream');
 const { encodeRow } = require('./process-db-value');
 
 /**
@@ -9,94 +10,164 @@ const { encodeRow } = require('./process-db-value');
  * @property {string} supplementalString
  */
 
-/**
- * Simplified JSON stream parser
- * @param {NodeJS.EventEmitter} emitter parser will emit metadata event when metadata is available
- * @returns {LineProcessor} string consumer
- */
-function JSONStream(emitter) {
-  // states are:
-  // start: { encountered, look for keys
-  // meta: meta encountered with `[`, parse everything until `]`
-  // data: data encountered with `[`, just parse every string until `]`
-  // other keys: concatenate until the end, then prepend `{` and JSON.parse
-  let state = null;
+class StreamingParser extends Writable {
+  constructor(format, stream) {
+    super({ objectMode: true });
 
-  let objBuffer;
-
-  /**
-   * Line processor function
-   * @param {string} l
-   */
-  function processLine(_l) {
-    // console.log ("LINE>", l);
-    const l = _l.trim();
-    if (!l.length) return;
-
-    if (state === null) {
-      // first string should contains `{`
-      if (l === '{') {
-        state = 'topKeys';
-      }
-    } else if (state === 'topKeys') {
-      // console.log ('TOP>', l);
-      if (l === '"meta":') {
-        state = 'meta';
-      } else if (l === '"data":') {
-        state = 'data';
-      } else if (l === '"meta": [') {
-        state = 'meta-array';
-      } else if (l === '"data": [') {
-        state = 'data-array';
-      } else {
-        processLine.supplementalString += l;
-      }
-    } else if (state === 'meta') {
-      if (l === '[') {
-        state = 'meta-array';
-      }
-    } else if (state === 'data') {
-      if (l === '[') {
-        state = 'data-array';
-      }
-    } else if (state === 'meta-array') {
-      if (l.match(/^},?$/)) {
-        processLine.columns.push(JSON.parse(`${objBuffer}}`));
-        objBuffer = undefined;
-      } else if (l === '{') {
-        objBuffer = l;
-      } else if (l.match(/^],?$/)) {
-        emitter.emit('metadata', processLine.columns);
-
-        state = 'topKeys';
-      } else {
-        objBuffer += l;
-      }
-    } else if (state === 'data-array') {
-      if (l.match(/^[\]}],?$/) && objBuffer) {
-        processLine.rows.push(JSON.parse(objBuffer + l[0]));
-        objBuffer = undefined;
-      } else if (l === '{' || l === '[') {
-        objBuffer = l;
-      } else if (l.match(/^],?$/)) {
-        state = 'topKeys';
-      } else if (objBuffer === undefined) {
-        processLine.rows.push(JSON.parse(l[l.length - 1] !== ',' ? l : l.substr(0, l.length - 1)));
-      } else {
-        objBuffer += l;
-      }
-    }
+    this.isCompact = /Compact/.test(format);
+    this.withProgress = /WithProgress/.test(format);
+    this.withNamesAndTypes = this.isCompact && /WithNamesAndTypes/.test(format);
+    this.linesProcessed = 0;
+    this.columns = [];
+    this.output = stream;
   }
 
-  processLine.columns = [];
-  processLine.rows = [];
-  processLine.supplementalString = '{';
+  _write(chunk, encoding, callback) {
+    const data = encoding === 'binary' ? JSON.parse(chunk) : chunk;
 
-  return processLine;
+    if (this.withNamesAndTypes && this.linesProcessed < 2) {
+      if (this.linesProcessed === 0) {
+        this.columns = data;
+      } else if (this.linesProcessed === 1) {
+        this.columns = this.columns.map((name, idx) => ({
+          name,
+          type: data[idx],
+        }));
+
+        this.output.emit('metadata', this.columns);
+        this.output.meta = this.columns;
+      }
+    } else if (this.withProgress && data.progress) {
+      this.output.emit('progress', data.progress);
+    } else if (this.withProgress) {
+      this.output.push(data.row);
+    } else {
+      this.output.push(data);
+    }
+
+    this.linesProcessed += 1;
+    callback(null);
+  }
+
+  _final(callback) {
+    this.output.push(null);
+    callback();
+  }
+}
+
+class JSONStream extends Writable {
+  constructor(stream) {
+    super({ objectMode: true });
+    this.objBuffer = undefined;
+    this.state = null;
+    this.columns = [];
+    this.supplementalString = '{';
+    this.output = stream;
+  }
+
+  _write(chunk, encoding, callback) {
+    const l = encoding === 'buffer'
+      ? chunk.toString('utf8').trim()
+      : chunk.trim();
+
+    if (!l.length) {
+      return callback();
+    }
+
+    if (this.state === null) {
+      // first string should contains `{`
+      if (l === '{') {
+        this.state = 'topKeys';
+      }
+    } else if (this.state === 'topKeys') {
+      if (l === '"meta":') {
+        this.state = 'meta';
+      } else if (l === '"data":') {
+        this.state = 'data';
+      } else if (l === '"meta": [') {
+        this.state = 'meta-array';
+      } else if (l === '"data": [') {
+        this.state = 'data-array';
+      } else {
+        this.supplementalString += l;
+      }
+    } else if (this.state === 'meta') {
+      if (l === '[') {
+        this.state = 'meta-array';
+      }
+    } else if (this.state === 'data') {
+      if (l === '[') {
+        this.state = 'data-array';
+      }
+    } else if (this.state === 'meta-array') {
+      if (l.match(/^},?$/)) {
+        this.columns.push(JSON.parse(`${this.objBuffer}}`));
+        this.objBuffer = undefined;
+      } else if (l === '{') {
+        this.objBuffer = l;
+      } else if (l.match(/^],?$/)) {
+        this.output.emit('metadata', this.columns);
+        this.output.meta = this.columns;
+        this.state = 'topKeys';
+      } else {
+        this.objBuffer += l;
+      }
+    } else if (this.state === 'data-array') {
+      if (l.match(/^[\]}],?$/) && this.objBuffer) {
+        this.output.push(JSON.parse(this.objBuffer + l[0]));
+        this.objBuffer = undefined;
+      } else if (l === '{' || l === '[') {
+        this.objBuffer = l;
+      } else if (l.match(/^],?$/)) {
+        this.state = 'topKeys';
+      } else if (this.objBuffer === undefined) {
+        this.output.push(JSON.parse(l[l.length - 1] !== ',' ? l : l.substr(0, l.length - 1)));
+      } else {
+        this.objBuffer += l;
+      }
+    }
+
+    return callback();
+  }
+
+  _final(callback) {
+    try {
+      this.supplementalString = JSON.parse(this.supplementalString);
+    } catch (e) {
+      /* noop */
+    }
+
+    this.output.emit('supplementalString', this.supplementalString);
+    this.output.supplemental = this.supplementalString;
+    this.output.push(null);
+    callback();
+  }
+}
+
+class CounterStream extends Transform {
+  constructor(stream) {
+    super();
+    this.size = 0;
+    this.output = stream;
+  }
+
+  _transform(chunk, encoding, callback) {
+    this.size += chunk.length;
+    this.push(chunk, encoding);
+    callback();
+  }
+
+  _flush(callback) {
+    this.emit('size', this.size);
+    this.output.transferred = this.size;
+    callback();
+  }
 }
 
 /**
  * Duplex stream to work with database
+ * @class RecordStream
+ * @extends {Duplex}
  * @param {object} [options] options
  * @param {object} [options.format] how to format filelds/rows internally
  */
@@ -105,9 +176,6 @@ function RecordStream(options = {}) {
   Duplex.call(this, options);
 
   this.format = options.format;
-
-  this._writeBuffer = [];
-  this._canWrite = false;
 
   Object.defineProperty(this, 'req', {
     get() { return this._req; },
@@ -148,15 +216,14 @@ RecordStream.prototype._write = function _write(_chunk, enc, cb) {
     return;
   }
 
-  // node stores further write requests into `_writableState.bufferedRequest` chain
-  // until cb is called.
-  this._canWrite = this.req.write(chunk, cb);
+  this.req.push(chunk);
+  cb(null);
 };
 
 RecordStream.prototype._destroy = function _destroy(err, cb) {
   process.nextTick(() => {
     RecordStream.super_.prototype._destroy.call(this, err, (destroyErr) => {
-      this.req.destroy(err);
+      this.req.destroy();
       cb(destroyErr || err);
     });
   });
@@ -164,11 +231,14 @@ RecordStream.prototype._destroy = function _destroy(err, cb) {
 
 RecordStream.prototype.end = function end(chunk, enc, cb) {
   RecordStream.super_.prototype.end.call(this, chunk, enc, () => {
-    this.req.end(cb);
+    this.req.push(null);
+    if (cb) cb();
   });
 };
 
 module.exports = {
   JSONStream,
   RecordStream,
+  CounterStream,
+  StreamingParser,
 };
