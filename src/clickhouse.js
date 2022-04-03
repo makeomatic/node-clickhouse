@@ -7,6 +7,7 @@ const split2 = require('split2');
 // const binarySplit = require('binary-split');
 const util = require('util');
 const { BufferListStream } = require('bl');
+const debug = require('debug')('makeomatic:clickhouse');
 const {
   JSONStream,
   RecordStream,
@@ -227,6 +228,7 @@ class ClickHouse {
     const stream = new RecordStream({ format: reqData.format });
     (async () => {
       try {
+        debug('[%j] request', reqParams);
         const body = new Readable({ read() {} });
         const req = this.client.request({
           ...reqParams,
@@ -244,7 +246,9 @@ class ClickHouse {
         stream.req = body;
         const response = await req;
         await httpResponseHandler(stream, reqData, cb, response);
+        debug('[%j] response handled', reqParams);
       } catch (e) {
+        debug('[%j] response error', reqParams, e);
         if (!cb || (cb && stream.listenerCount('error'))) {
           stream.emit('error', e);
         }

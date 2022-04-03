@@ -12,7 +12,7 @@ describe('error parsing', () => {
     await once(stream, 'error');
   });
 
-  it('returns error for unknown sql', async () => {
+  it.skip('returns error for unknown sql', async () => {
     const ch = new ClickHouse({ host, port, readonly: true });
     const stream = ch.query('ABCDEFGHIJKLMN', { syncParser: true });
     const [err] = await once(stream, 'error');
@@ -22,7 +22,7 @@ describe('error parsing', () => {
     assert.equal(err.colno, 1, 'col  number should eq 1');
   });
 
-  it('returns error with line/col for sql with garbage', async () => {
+  it.skip('returns error with line/col for sql with garbage', async () => {
     const ch = new ClickHouse({ host, port, readonly: true });
     const stream = ch.query('CREATE\n\t\tABCDEFGHIJKLMN', { syncParser: true });
     const [err] = await once(stream, 'error');

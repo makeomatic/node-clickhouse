@@ -16,7 +16,8 @@
     "simpletest": "mocha --recursive ./test -R spec",
     "torturetest": "TORTURE=1 NODE_ENV=test node --expose-gc ./node_modules/.bin/mocha --recursive ./test -R spec",
     "clinic": "TORTURE=1 NODE_ENV=test clinic flame -- node --expose-gc ./node_modules/.bin/mocha --recursive ./test -R spec",
-    "semantic-release": "semantic-release"
+    "semantic-release": "semantic-release",
+    "prepare": "mdep install"
   },
   "repository": {
     "type": "git",
@@ -39,35 +40,32 @@
   "dependencies": {
     "binary-split": "^1.0.5",
     "bl": "^5.0.0",
+    "debug": "^4.3.4",
     "lodash.defaults": "^4.2.0",
-    "split2": "^3.2.2",
-    "undici": "^4.4.7"
+    "split2": "^4.1.0",
+    "undici": "^5.0.0"
   },
   "devDependencies": {
     "@airbnb/node-memwatch": "^2.0.0",
-    "@makeomatic/deploy": "^10.4.0",
+    "@makeomatic/deploy": "^12.6.3",
     "bluebird": "^3.5.0",
-    "clinic": "^9.0.0",
+    "clinic": "^11.1.0",
     "codecov": "^3.8.3",
-    "eslint": "^7.32.0",
-    "eslint-config-makeomatic": "^5.0.4",
-    "eslint-plugin-import": "^2.24.2",
-    "eslint-plugin-unicorn": "^35.0.0",
-    "mocha": "^9.1.0",
+    "eslint": "^8.12.0",
+    "eslint-config-makeomatic": "^5.1.0",
+    "eslint-plugin-import": "^2.25.4",
+    "eslint-plugin-promise": "^6.0.0",
+    "eslint-plugin-unicorn": "^42.0.0",
+    "mocha": "^9.2.2",
     "nyc": "^15.1.0",
     "p-limit": "3",
-    "semantic-release": "^17.4.7"
+    "semantic-release": "^19.0.2",
+    "typescript": "^4.6.3"
   },
   "engines": {
     "node": ">= 12"
   },
   "files": [
     "src/"
-  ],
-  "husky": {
-    "hooks": {
-      "commit-msg": "commitlint -e $HUSKY_GIT_PARAMS",
-      "prepare-commit-msg": "./node_modules/@makeomatic/deploy/git-hooks/prepare-commit-msg $HUSKY_GIT_PARAMS"
-    }
-  }
+  ]
 }
