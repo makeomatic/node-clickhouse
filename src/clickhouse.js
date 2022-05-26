@@ -221,10 +221,6 @@ class ClickHouse {
   }
 
   httpRequest(reqParams, reqData, cb) {
-    if (reqParams.query) {
-      reqParams.path = `${reqParams.pathname || reqParams.path}?${qs.stringify(reqParams.query)}`;
-    }
-
     const stream = new RecordStream({ format: reqData.format });
     (async () => {
       try {
