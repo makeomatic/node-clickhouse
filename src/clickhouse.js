@@ -1,6 +1,5 @@
 const { Pool } = require('undici');
 const { Readable } = require('stream');
-const qs = require('querystring');
 const defaults = require('lodash.defaults');
 const assert = require('assert');
 const split2 = require('split2');
