@@ -32,11 +32,21 @@ describe('insert data', function testSuite() {
   this.timeout(5000);
   const host = process.env.CLICKHOUSE_HOST || '127.0.0.1';
   const port = process.env.CLICKHOUSE_PORT || 8123;
+  const user = process.env.CLICKHOUSE_USER || 'new_user';
+  const password = process.env.CLIKHOUSE_PASSWORD || 'new_password';
+
+  const clickhouseOptions = {
+    host,
+    port,
+    user,
+    password,
+  };
+
   let dbCreated = false;
   const dbName = 'node_clickhouse_test_insert';
 
   before(async () => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     const okFn = async () => {};
     await ch.querying(`DROP DATABASE ${dbName}`).then(okFn, okFn);
     await ch.querying(`CREATE DATABASE ${dbName}`);
@@ -44,12 +54,12 @@ describe('insert data', function testSuite() {
   });
 
   it('creates a table', (done) => {
-    const ch = new ClickHouse({ host, port, queryOptions: { database: dbName } });
+    const ch = new ClickHouse({ ...clickhouseOptions, queryOptions: { database: dbName } });
     ch.query('CREATE TABLE t (a UInt8) ENGINE = Memory', done);
   });
 
   it('inserts some prepared data using stream', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     const stream = ch.query('INSERT INTO t', { queryOptions: { database: dbName } }, (err) => {
       assert(!err, err);
 
@@ -69,7 +79,7 @@ describe('insert data', function testSuite() {
   });
 
   it('inserts some data', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     ch.query('INSERT INTO t VALUES (1),(2),(3)', { queryOptions: { database: dbName } }, (err) => {
       assert(!err, err);
 
@@ -78,12 +88,12 @@ describe('insert data', function testSuite() {
   });
 
   it('inserts some data using promise', () => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     return ch.querying('INSERT INTO t VALUES (1),(2),(3)', { queryOptions: { database: dbName } });
   });
 
   it('creates a table 2', (done) => {
-    const ch = new ClickHouse({ host, port, queryOptions: { database: dbName } });
+    const ch = new ClickHouse({ ...clickhouseOptions, queryOptions: { database: dbName } });
     ch.query('CREATE TABLE t2 (a UInt8, b Float32, x Nullable(String), z DateTime) ENGINE = Memory', (err) => {
       assert(!err);
 
@@ -92,7 +102,7 @@ describe('insert data', function testSuite() {
   });
 
   it('inserts data from array using stream', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
 
     const stream = ch.query('INSERT INTO t2', { queryOptions: { database: dbName } }, (err) => {
       assert(!err, err);
@@ -122,7 +132,7 @@ describe('insert data', function testSuite() {
   });
 
   it('creates a table 3', (done) => {
-    const ch = new ClickHouse({ host, port, queryOptions: { database: dbName } });
+    const ch = new ClickHouse({ ...clickhouseOptions, queryOptions: { database: dbName } });
     ch.query('CREATE TABLE t3 (a UInt8, b Float32, x Nullable(String), z DateTime) ENGINE = Memory', (err) => {
       assert(!err);
 
@@ -131,7 +141,7 @@ describe('insert data', function testSuite() {
   });
 
   it('inserts data from array of objects using stream', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
 
     const stream = ch.query('INSERT INTO t3', { format: 'JSONEachRow', queryOptions: { database: dbName } }, (err) => {
       assert(!err, err);
@@ -167,7 +177,7 @@ describe('insert data', function testSuite() {
   });
 
   it('inserts from select', (done) => {
-    const ch = new ClickHouse({ host, port, queryOptions: { database: dbName } });
+    const ch = new ClickHouse({ ...clickhouseOptions, queryOptions: { database: dbName } });
 
     ch.query('INSERT INTO t3 SELECT * FROM t2', {}, (err) => {
       assert(!err, err);
@@ -191,7 +201,7 @@ describe('insert data', function testSuite() {
   });
 
   it('piping data from csv file', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
 
     const csvFileName = __filename.replace('.js', '.csv');
 
@@ -221,7 +231,7 @@ describe('insert data', function testSuite() {
   });
 
   it('piping data from tsv file', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     const tsvFileName = __filename.replace('.js', '.tsv');
 
     function processFileStream(fileStream) {
@@ -250,12 +260,12 @@ describe('insert data', function testSuite() {
   });
 
   it('creates a table 4', (done) => {
-    const ch = new ClickHouse({ host, port, queryOptions: { database: dbName } });
+    const ch = new ClickHouse({ ...clickhouseOptions, queryOptions: { database: dbName } });
     ch.query('CREATE TABLE t4 (arrayString Array(String), arrayInt Array(UInt32)) ENGINE = Memory', done);
   });
 
   it('inserts array with format JSON using stream', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
 
     const stream = ch.query('INSERT INTO t4', { queryOptions: { database: dbName }, format: 'JSONEachRow' }, (err) => {
       assert(!err, err);
@@ -277,12 +287,12 @@ describe('insert data', function testSuite() {
   });
 
   it('creates a table 5', () => {
-    const ch = new ClickHouse({ host, port, queryOptions: { database: dbName } });
+    const ch = new ClickHouse({ ...clickhouseOptions, queryOptions: { database: dbName } });
     return ch.querying('CREATE TABLE t5 (a UInt8, b Float32, x Nullable(String), z DateTime) ENGINE = Memory');
   });
 
   it('inserts csv with FORMAT clause', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     const stream = ch.query('INSERT INTO t5 FORMAT CSV', { queryOptions: { database: dbName } }, (err) => {
       assert(!err, err);
 
@@ -304,19 +314,19 @@ describe('insert data', function testSuite() {
   });
 
   it('select data with FORMAT clause', async () => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     const data = await ch.querying('SELECT * FROM t5 FORMAT Values', { queryOptions: { database: dbName } });
     assert.equal(data, '(0,0,NULL,\'1970-01-02 00:00:00\'),(1,1.5,\'1\',\'2050-01-01 00:00:00\')');
   });
 
   it('select data with GET method and FORMAT clause', async () => {
-    const ch = new ClickHouse({ host, port, useQueryString: true });
+    const ch = new ClickHouse({ ...clickhouseOptions, useQueryString: true });
     const data = await ch.querying('SELECT * FROM t5 FORMAT Values', { queryOptions: { database: dbName } });
     assert.equal(data, '(0,0,NULL,\'1970-01-02 00:00:00\'),(1,1.5,\'1\',\'2050-01-01 00:00:00\')');
   });
 
   it('select data with GET method and format option', async () => {
-    const ch = new ClickHouse({ host, port, useQueryString: true });
+    const ch = new ClickHouse({ ...clickhouseOptions, useQueryString: true });
     const data = await ch.querying('SELECT * FROM t5', { queryOptions: { database: dbName }, format: 'Values' });
     assert.equal(data, '(0,0,NULL,\'1970-01-02 00:00:00\'),(1,1.5,\'1\',\'2050-01-01 00:00:00\')');
   });
@@ -324,7 +334,7 @@ describe('insert data', function testSuite() {
   after((done) => {
     if (!dbCreated) return done;
 
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     return ch.query(`DROP DATABASE ${dbName}`, done);
   });
 });

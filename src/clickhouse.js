@@ -202,17 +202,11 @@ class ClickHouse {
     });
 
     const { protocol, host, port } = this.options;
-    const { user, password } = this.options;
-    let origin = `${host}:${port}`;
-
-    if (user || password) {
-      origin = `${user || 'default'}:${password || ''}@${origin}`;
-    }
 
     /**
      * @type {Pool}
      */
-    this.client = new Pool(`${protocol}//${origin}`, this.options.poolOptions);
+    this.client = new Pool(`${protocol}//${host}:${port}`, this.options.poolOptions);
   }
 
   async close() {
@@ -224,10 +218,18 @@ class ClickHouse {
     (async () => {
       try {
         debug('[%j] request', reqParams);
+        const headers = {};
+        if (this.options.user) {
+          headers['x-clickhouse-user'] = this.options.user;
+        }
+        if (this.options.password) {
+          headers['x-clickhouse-key'] = this.options.password;
+        }
         const body = new Readable({ read() {} });
         const req = this.client.request({
           ...reqParams,
           body,
+          headers,
         });
 
         if (reqData.query) {

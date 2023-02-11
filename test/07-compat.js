@@ -6,10 +6,20 @@ const noop = () => {};
 describe('api compatibility', () => {
   const host = process.env.CLICKHOUSE_HOST || '127.0.0.1';
   const port = process.env.CLICKHOUSE_PORT || 8123;
-  const ch = new ClickHouse({ host, port, queryOptions: { database: DB_NAME } });
+  const user = process.env.CLICKHOUSE_USER || 'new_user';
+  const password = process.env.CLIKHOUSE_PASSWORD || 'new_password';
+
+  const clickhouseOptions = {
+    host,
+    port,
+    user,
+    password,
+  };
+
+  const ch = new ClickHouse({ ...clickhouseOptions, queryOptions: { database: DB_NAME } });
 
   before(() => (
-    new ClickHouse({ host, port })
+    new ClickHouse(clickhouseOptions)
       .querying(`CREATE DATABASE IF NOT EXISTS "${DB_NAME}"`)
   ));
 

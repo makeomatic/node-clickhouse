@@ -5,6 +5,15 @@ const ClickHouse = require('../src/clickhouse');
 describe('error parsing', () => {
   const host = process.env.CLICKHOUSE_HOST || '127.0.0.1';
   const port = process.env.CLICKHOUSE_PORT || 8123;
+  const user = process.env.CLICKHOUSE_USER || 'new_user';
+  const password = process.env.CLIKHOUSE_PASSWORD || 'new_password';
+
+  const clickhouseOptions = {
+    host,
+    port,
+    user,
+    password,
+  };
 
   it('will not throw on http error', async () => {
     const ch = new ClickHouse({ host, port: 59999, readonly: true });
@@ -33,7 +42,7 @@ describe('error parsing', () => {
   });
 
   it('returns error for empty sql', async () => {
-    const ch = new ClickHouse({ host, port, readonly: true });
+    const ch = new ClickHouse({ ...clickhouseOptions, readonly: true });
     const stream = ch.query('-- nothing here', { syncParser: true });
     const [err] = await once(stream, 'error');
     assert(err);
