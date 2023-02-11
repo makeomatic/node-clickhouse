@@ -1,6 +1,8 @@
 version: "3"
 services:
   clickhouse:
-    image: clickhouse/clickhouse-server:22-alpine
+    image: clickhouse/clickhouse-server:23.1-alpine
     ports:
       - "8123:8123"
+    volumes:
+      - "./configs/clickhouse/users.d:/etc/clickhouse-server/users.d"

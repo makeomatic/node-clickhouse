@@ -28,6 +28,16 @@ describe('torturing', function testSuite() {
 
   const host = process.env.CLICKHOUSE_HOST || '127.0.0.1';
   const port = process.env.CLICKHOUSE_PORT || 8123;
+  const user = process.env.CLICKHOUSE_USER || 'new_user';
+  const password = process.env.CLIKHOUSE_PASSWORD || 'new_password';
+
+  const clickhouseOptions = {
+    host,
+    port,
+    user,
+    password,
+  };
+
   let ch;
   // let hd;
   let baselineMemoryUsage;
@@ -36,7 +46,7 @@ describe('torturing', function testSuite() {
     if (global.gc) global.gc();
     // hd = new memwatch.HeapDiff();
     baselineMemoryUsage = process.memoryUsage();
-    ch = new ClickHouse({ host, port, readonly: true });
+    ch = new ClickHouse({ ...clickhouseOptions, readonly: true });
   });
 
   test('selects 1 million using async parser', async () => {

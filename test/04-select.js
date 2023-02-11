@@ -4,9 +4,18 @@ const ClickHouse = require('../src/clickhouse');
 describe('select data from database', () => {
   const host = process.env.CLICKHOUSE_HOST || '127.0.0.1';
   const port = process.env.CLICKHOUSE_PORT || 8123;
+  const user = process.env.CLICKHOUSE_USER || 'new_user';
+  const password = process.env.CLIKHOUSE_PASSWORD || 'new_password';
+
+  const clickhouseOptions = {
+    host,
+    port,
+    user,
+    password,
+  };
 
   it('selects using callback', (done) => {
-    const ch = new ClickHouse({ host, port, readonly: true });
+    const ch = new ClickHouse({ ...clickhouseOptions, readonly: true });
     ch.query('SELECT 1', { syncParser: true }, (err, result) => {
       assert(!err);
       assert(result.meta, 'result should be Object with `data` key to represent rows');
@@ -16,7 +25,7 @@ describe('select data from database', () => {
   });
 
   it('selects using callback and query submitted in the POST body', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     ch.query('SELECT 1', { syncParser: true }, (err, result) => {
       assert(!err);
       assert(result.meta, 'result should be Object with `data` key to represent rows');
@@ -26,7 +35,7 @@ describe('select data from database', () => {
   });
 
   it('selects numbers using callback', (done) => {
-    const ch = new ClickHouse({ host, port, readonly: true });
+    const ch = new ClickHouse({ ...clickhouseOptions, readonly: true });
     ch.query('SELECT number FROM system.numbers LIMIT 10', { syncParser: true }, (err, result) => {
       assert(!err);
       assert(result.meta, 'result should be Object with `data` key to represent rows');
@@ -43,7 +52,7 @@ describe('select data from database', () => {
   });
 
   it('selects numbers using promise should already have parsed data', () => {
-    const ch = new ClickHouse({ host, port, readonly: true });
+    const ch = new ClickHouse({ ...clickhouseOptions, readonly: true });
     return ch.querying('SELECT number FROM system.numbers LIMIT 10').then((result) => {
       assert(result.meta, 'result should be Object with `data` key to represent rows');
       assert(result.data, 'result should be Object with `meta` key to represent column info');
@@ -60,7 +69,7 @@ describe('select data from database', () => {
 
   it('selects numbers as dataObjects using promise', () => {
     const ch = new ClickHouse({
-      host, port, readonly: true, dataObjects: true,
+      ...clickhouseOptions, readonly: true, dataObjects: true,
     });
     return ch.querying('SELECT number FROM system.numbers LIMIT 10').then((result) => {
       assert(result.meta, 'result should be Object with `data` key to represent rows');
@@ -78,7 +87,7 @@ describe('select data from database', () => {
   });
 
   it('selects numbers using callback and query submitted in the POST body', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     ch.query('SELECT number FROM system.numbers LIMIT 10', { syncParser: true }, (err, result) => {
       assert(!err);
       assert(result.meta, 'result should be Object with `meta` key to represent rows');
@@ -96,7 +105,7 @@ describe('select data from database', () => {
   });
 
   it('selects numbers asynchronously using events and query submitted in the POST body', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     const rows = [];
     const stream = ch.query('SELECT number FROM system.numbers LIMIT 10', (err, result) => {
       assert(!err);
@@ -118,7 +127,7 @@ describe('select data from database', () => {
   });
 
   it('selects numbers asynchronously using stream and query submitted in the POST body', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     let metadata;
     const rows = [];
     const stream = ch.query('SELECT number FROM system.numbers LIMIT 10');
@@ -148,7 +157,7 @@ describe('select data from database', () => {
   });
 
   it('selects number objects asynchronously using stream and query submitted in the POST body', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     let metadata;
     const rows = [];
     const stream = ch.query('SELECT number FROM system.numbers LIMIT 10', { dataObjects: true });
@@ -178,7 +187,7 @@ describe('select data from database', () => {
   });
 
   it('select data in unsupported format', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
 
     ch.query('SELECT number FROM system.numbers LIMIT 10', { format: 'CSV' }, (err, result) => {
       assert(!err, err);
@@ -190,7 +199,7 @@ describe('select data from database', () => {
   });
 
   it('can cancel an ongoing select by calling destroy', (done) => {
-    const ch = new ClickHouse({ host, port });
+    const ch = new ClickHouse(clickhouseOptions);
     const rows = [];
     const limit = 10000;
     const stream = ch.query(`SELECT number FROM system.numbers LIMIT ${limit}`, () => {
@@ -210,7 +219,7 @@ describe('select data from database', () => {
   });
 
   it('select query with WITH clause will produces result formatted ', (done) => {
-    const ch = new ClickHouse({ host, port, format: 'JSON' });
+    const ch = new ClickHouse({ ...clickhouseOptions, format: 'JSON' });
     ch.query('WITH 10 as pagesize SELECT 1', { syncParser: true }, (err, result) => {
       assert(!err);
       assert(result.meta, 'result should be Object with `data` key to represent rows');
