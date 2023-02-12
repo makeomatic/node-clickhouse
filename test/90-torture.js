@@ -29,7 +29,7 @@ describe('torturing', function testSuite() {
   const host = process.env.CLICKHOUSE_HOST || '127.0.0.1';
   const port = process.env.CLICKHOUSE_PORT || 8123;
   const user = process.env.CLICKHOUSE_USER || 'new_user';
-  const password = process.env.CLIKHOUSE_PASSWORD || 'new_password';
+  const password = process.env.CLICKHOUSE_PASSWORD || 'new_password';
 
   const clickhouseOptions = {
     host,
