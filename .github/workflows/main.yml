@@ -15,6 +15,9 @@ jobs:
         image: yandex/clickhouse-server
         ports:
           - 8123:8123
+        env:
+          CLICKHOUSE_USER: "default"
+          CLICKHOUSE_PASSWORD: "default"
 
     steps:
       - name: Checkout
@@ -32,7 +35,7 @@ jobs:
       - run: yarn test
         env:
           CLICKHOUSE_USER: "default"
-          CLICKHOUSE_PASSWORD: ""
+          CLICKHOUSE_PASSWORD: "default"
 
   publish:
     name: Release
