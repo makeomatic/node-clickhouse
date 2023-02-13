@@ -30,6 +30,9 @@ jobs:
 
       - run: yarn install --frozen-lockfile
       - run: yarn test
+        env:
+          CLICKHOUSE_USER: "default"
+          CLICKHOUSE_PASSWORD: ""
 
   publish:
     name: Release
