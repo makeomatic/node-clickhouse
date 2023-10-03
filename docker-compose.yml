@@ -1,8 +1,15 @@
 version: "3"
 services:
   clickhouse:
-    image: clickhouse/clickhouse-server:23.1-alpine
-    ports:
-      - "8123:8123"
+    image: clickhouse/clickhouse-server:23-alpine
     volumes:
       - "./configs/clickhouse/users.d:/etc/clickhouse-server/users.d"
+
+  tester:
+    image: makeomatic/node:20.8
+    depends_on:
+      - clickhouse
+    command: ["tail", "-f", "/dev/null"]
+    working_dir: /src
+    volumes:
+      - ${PWD}:/src
