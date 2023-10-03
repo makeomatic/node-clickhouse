@@ -1,9 +1,13 @@
 /* eslint-disable no-console */
 // const memwatch = require('@airbnb/node-memwatch');
-const { once } = require('events');
+const { once } = require('node:events');
 const Limit = require('p-limit');
 // const util = require('util');
 const ClickHouse = require('../src/clickhouse');
+const tempy = require('tempy');
+const { pipeline } = require('node:stream/promises');
+const fs = require('node:fs')
+const csvWriter = require('csv-write-stream')
 
 // replace with it, if you want to run this test suite
 const test = process.env.TORTURE ? it : it.skip;
@@ -85,15 +89,21 @@ describe('torturing', function testSuite() {
   test('selects system.columns using async parser #1', async () => {
     let symbolsTransferred = 0;
 
-    const input = Array.from({ length: 10000 }).map(() => {
+    const input = Array.from({ length: 1000 }).map(() => {
       return limit(async () => {
-        const stream = ch.query('SELECT * FROM system.columns', { format: 'JSONCompactEachRowWithNamesAndTypes' });
-        stream.on('data', () => {});
-        await Promise.all([
-          once(stream, 'metadata'),
-          once(stream, 'end'),
-        ]);
-        symbolsTransferred += stream.transferred;
+        await tempy.file.task(async (filepath) => {
+          const stream = ch.query('SELECT * FROM system.columns', { format: 'JSONCompactEachRowWithNamesAndTypes' })
+          const writeTo = fs.createWriteStream(filepath)
+          
+          await once(stream, 'metadata')
+          await pipeline(
+            stream,
+            csvWriter({ headers: stream.meta.map(x => x.name) }),
+            writeTo
+          )
+
+          symbolsTransferred += stream.transferred;
+        })
       });
     });
 

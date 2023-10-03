@@ -238,9 +238,10 @@ class ClickHouse {
 
         if (reqData.finalized) {
           body.push(null);
+        } else {
+          stream.req = body;
         }
 
-        stream.req = body;
         const response = await req;
         await httpResponseHandler(stream, reqData, cb, response);
         debug('[%j] response handled', reqParams);

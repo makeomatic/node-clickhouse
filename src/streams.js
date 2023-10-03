@@ -19,6 +19,10 @@ class StreamingParser extends Writable {
     this.withNamesAndTypes = this.isCompact && /WithNamesAndTypes/.test(format);
     this.linesProcessed = 0;
     this.columns = [];
+
+    /**
+     * @type {Duplex}
+     */
     this.output = stream;
   }
 
@@ -39,10 +43,13 @@ class StreamingParser extends Writable {
       }
     } else if (this.withProgress && data.progress) {
       this.output.emit('progress', data.progress);
-    } else if (this.withProgress) {
-      this.output.push(data.row);
     } else {
-      this.output.push(data);
+      const datum = this.withProgress ? data.row : data;
+      if (!this.output.push(datum)) {
+        this.linesProcessed += 1;
+        this.output.wait(callback);
+        return
+      }
     }
 
     this.linesProcessed += 1;
@@ -176,6 +183,7 @@ function RecordStream(options = {}) {
   Duplex.call(this, options);
 
   this.format = options.format;
+  this._resume = null;
 
   Object.defineProperty(this, 'req', {
     get() { return this._req; },
@@ -185,8 +193,25 @@ function RecordStream(options = {}) {
 
 util.inherits(RecordStream, Duplex);
 
+RecordStream.prototype.wait = function wait(callback) {
+  if (this._resume) {
+    // This is a bug. If it can happen in the wild (eg lost
+    // network connection), multiplexing needs to be added.
+    throw new Error('not ready');
+  }
+
+  if (this.ready) this.ready = false;
+  this._resume = callback;
+}
+
 RecordStream.prototype._read = function read() {
-  // nothing to do there, when data comes, push will be called
+  const { _resume } = this;
+  if (!_resume) {
+    this.ready = true;
+    return;
+  }
+  this._resume = null;
+  _resume();
 };
 
 // http://ey3ball.github.io/posts/2014/07/17/node-streams-back-pressure/
@@ -221,6 +246,10 @@ RecordStream.prototype._write = function _write(_chunk, enc, cb) {
 };
 
 RecordStream.prototype._destroy = function _destroy(err, cb) {
+  if (!this.req) {
+    return RecordStream.super_.prototype._destroy.call(this, err, cb)
+  }
+
   process.nextTick(() => {
     RecordStream.super_.prototype._destroy.call(this, err, (destroyErr) => {
       this.req.destroy();
@@ -230,6 +259,10 @@ RecordStream.prototype._destroy = function _destroy(err, cb) {
 };
 
 RecordStream.prototype.end = function end(chunk, enc, cb) {
+  if (!this.req) {
+    return RecordStream.super_.prototype.end.call(this, chunk, enc, cb)
+  }
+
   RecordStream.super_.prototype.end.call(this, chunk, enc, () => {
     this.req.push(null);
     if (cb) cb();

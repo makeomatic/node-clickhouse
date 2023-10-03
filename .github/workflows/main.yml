@@ -8,11 +8,11 @@ jobs:
     name: Node ${{ matrix.node }} 
     strategy: 
       matrix:
-        node-version: [14.x, 16.x] 
+        node-version: [18.x, 20.x] 
     
     services:
       clickhouse:
-        image: yandex/clickhouse-server
+        image: clickhouse/clickhouse-server:23-alpine
         ports:
           - 8123:8123
         env:
@@ -31,8 +31,8 @@ jobs:
       - name: Verify Clickhouse is Running
         run: curl -v "http://127.0.0.1:8123/"
 
-      - run: yarn install --frozen-lockfile
-      - run: yarn test
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
         env:
           CLICKHOUSE_USER: "default"
           CLICKHOUSE_PASSWORD: "default"
@@ -49,11 +49,11 @@ jobs:
       # NPM Registry
       - uses: actions/setup-node@v2
         with:
-          node-version: '14.x'
+          node-version: '18.x'
           registry-url: 'https://registry.npmjs.org'
           scope: ${{ secrets.NPM_MAKEOMATIC_SCOPE }}
-      - run: yarn install --frozen-lockfile
-      - run: yarn semantic-release
+      - run: pnpm i --frozen-lockfile
+      - run: pnpm semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.SEMANTIC_RELEASE_BOT_NPM_TOKEN }}
